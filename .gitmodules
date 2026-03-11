@@ -1,3 +1,4 @@
 [submodule "vendor/BracketDiffusion"]
 	path = vendor/BracketDiffusion
 	url = https://github.com/m-bemana/BracketDiffusion.git
+	ignore = dirty
