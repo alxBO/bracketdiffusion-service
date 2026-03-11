@@ -355,20 +355,32 @@ async function loadHdrData(jobId) {
 function applyClientTonemap() {
     if (!hdrData) return;
 
-    const { width, height, pixels } = hdrData;
+    const { width: hdrW, height: hdrH, pixels } = hdrData;
     const exposure = parseFloat($('#exposure-slider').value);
     const tonemap = $('#tonemap-select').value;
     const gamma = parseFloat($('#gamma-slider').value);
     const exposureMul = Math.pow(2, exposure);
 
     const canvas = $('#compare-canvas');
-    canvas.width = width;
-    canvas.height = height;
+    const compareImg = $('#compare-input');
+
+    // Match canvas to input image size so A/B overlay aligns
+    const displayW = compareImg.naturalWidth || hdrW;
+    const displayH = compareImg.naturalHeight || hdrH;
+    canvas.width = displayW;
+    canvas.height = displayH;
+
     const ctx = canvas.getContext('2d');
-    const imgData = ctx.createImageData(width, height);
+
+    // Tonemap at native HDR resolution into offscreen canvas
+    const offscreen = document.createElement('canvas');
+    offscreen.width = hdrW;
+    offscreen.height = hdrH;
+    const offCtx = offscreen.getContext('2d');
+    const imgData = offCtx.createImageData(hdrW, hdrH);
     const out = imgData.data;
 
-    for (let i = 0; i < width * height; i++) {
+    for (let i = 0; i < hdrW * hdrH; i++) {
         let r = Math.max(0, pixels[i * 3]) * exposureMul;
         let g = Math.max(0, pixels[i * 3 + 1]) * exposureMul;
         let b = Math.max(0, pixels[i * 3 + 2]) * exposureMul;
@@ -398,7 +410,12 @@ function applyClientTonemap() {
         out[idx + 3] = 255;
     }
 
-    ctx.putImageData(imgData, 0, 0);
+    offCtx.putImageData(imgData, 0, 0);
+
+    // Scale tonemapped HDR to match input image dimensions
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(offscreen, 0, 0, displayW, displayH);
 }
 
 function tonemapAces(x) {
