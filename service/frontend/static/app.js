@@ -172,37 +172,70 @@ $('#cancel-btn').addEventListener('click', async () => {
     } catch (e) { /* ignore */ }
 });
 
-// --- SSE Progress ---
+// --- SSE Progress (with polling fallback for Cloudflare tunnels) ---
+let pollTimer = null;
+
 function startSSE(jobId) {
     if (evtSource) evtSource.close();
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 
+    let sseGotMessage = false;
     evtSource = new EventSource(`/api/status/${jobId}`);
-    evtSource.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-        updateProgress(data);
 
-        if (data.stage === 'complete') {
-            evtSource.close();
-            evtSource = null;
-            loadResult(jobId);
-        } else if (data.stage === 'error') {
-            evtSource.close();
-            evtSource = null;
-            showError(data.message);
-            hide($('#progress-section'));
-            $('#generate-btn').disabled = false;
-        } else if (data.stage === 'cancelled') {
-            evtSource.close();
-            evtSource = null;
-            hide($('#progress-section'));
-            $('#generate-btn').disabled = false;
-        }
+    evtSource.onmessage = (e) => {
+        sseGotMessage = true;
+        handleStatusUpdate(jobId, JSON.parse(e.data));
     };
 
     evtSource.onerror = () => {
         evtSource.close();
         evtSource = null;
+        if (!sseGotMessage) startPolling(jobId);
     };
+
+    // Fallback: if no SSE message after 3s, switch to polling
+    setTimeout(() => {
+        if (!sseGotMessage && evtSource) {
+            evtSource.close();
+            evtSource = null;
+            startPolling(jobId);
+        }
+    }, 3000);
+}
+
+function startPolling(jobId) {
+    if (pollTimer) return;
+    pollTimer = setInterval(async () => {
+        try {
+            const resp = await fetch(`/api/status-poll/${jobId}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            handleStatusUpdate(jobId, data);
+        } catch (e) { /* retry next tick */ }
+    }, 1000);
+}
+
+function handleStatusUpdate(jobId, data) {
+    updateProgress(data);
+
+    if (data.stage === 'complete') {
+        stopProgress();
+        loadResult(jobId);
+    } else if (data.stage === 'error') {
+        stopProgress();
+        showError(data.message);
+        hide($('#progress-section'));
+        $('#generate-btn').disabled = false;
+    } else if (data.stage === 'cancelled') {
+        stopProgress();
+        hide($('#progress-section'));
+        $('#generate-btn').disabled = false;
+    }
+}
+
+function stopProgress() {
+    if (evtSource) { evtSource.close(); evtSource = null; }
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 
 function updateProgress(data) {
