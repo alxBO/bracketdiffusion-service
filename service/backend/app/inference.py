@@ -262,27 +262,95 @@ class BracketDiffusionPipeline:
         )
 
         if progress_cb:
-            progress_cb("merging", 0.90, "Merging brackets to HDR...")
+            progress_cb("merging", 0.90, "Merging all brackets to HDR...")
 
-        # Merge brackets into HDR
+        # Merge ALL brackets into HDR (vendor only uses 3, we use all)
         # brackets is (num_brackets, 3, 256, 256) in [-1, 1]
-        brackets_01 = (brackets + 1.0) / 2.0  # normalize to [0, 1]
+        brackets_01 = (brackets + 1.0) / 2.0
         brackets_01 = brackets_01.clamp(0.0, 1.0)
 
-        hdr = operator.LDRmerge_to_HDR(brackets_01, evs)
-        # hdr is (1, 3, 256, 256) linear HDR
+        hdr_256 = self._merge_all_brackets(operator, brackets_01, evs)
+        # hdr_256 is (3, 256, 256) linear HDR
 
         if progress_cb:
-            progress_cb("postprocessing", 0.93, "Post-processing HDR...")
+            progress_cb("upscaling", 0.93, "Upscaling HDR to original resolution...")
 
-        # Convert to numpy (H, W, 3)
-        hdr_np = hdr[0].permute(1, 2, 0).cpu().numpy().astype(np.float32)
-        hdr_np = np.maximum(hdr_np, 0.0)
+        # Gain-map upsampling: apply HDR luminance ratios to full-res input
+        orig_h, orig_w = img_rgb.shape[:2]
+        hdr_np = self._gainmap_upsample(hdr_256, img_rgb, operator, orig_h, orig_w)
 
-        del brackets, brackets_01, hdr, ref_img
+        del brackets, brackets_01, hdr_256, ref_img
         self._clear_device_cache()
 
         return hdr_np
+
+    @staticmethod
+    def _merge_all_brackets(operator, brackets_01, evs):
+        """Merge all brackets using Debevec-style weighted average.
+        Unlike vendor code which uses only 3, this uses all N brackets."""
+        n = len(brackets_01)
+        device = brackets_01.device
+
+        # Apply inverse CRF to linearize each bracket
+        linear = operator.invCRF(brackets_01)
+
+        # Weight function: hat-shaped (pixels near 0 or 1 are unreliable)
+        # w(z) = z for dark, (1-z) for bright, triangle for middle
+        weights = torch.zeros_like(brackets_01)
+        for i in range(n):
+            z = brackets_01[i]
+            # Triangle weight: peaks at 0.5, zero at 0 and 1
+            w = torch.where(z <= 0.5, z, 1.0 - z)
+            weights[i] = w.clamp(min=1e-6)
+
+        # Divide by exposure to normalize to scene radiance
+        evs_tensor = torch.tensor(evs, device=device, dtype=torch.float32)[:, None, None, None]
+        linear = linear / evs_tensor
+
+        # Weighted average
+        hdr = (linear * weights).sum(0) / weights.sum(0).clamp(min=1e-8)
+        return hdr.clamp(min=0.0)
+
+    @staticmethod
+    def _gainmap_upsample(hdr_256, img_rgb_fullres, operator, orig_h, orig_w):
+        """Upsample 256x256 HDR to original resolution using gain map.
+
+        1. Compute low-res input luminance (linearized via invCRF)
+        2. Compute gain = HDR / input_linear at 256x256
+        3. Upscale gain map to full resolution (bilateral-aware)
+        4. Apply gain to full-res linearized input
+        """
+        # hdr_256 is (3, 256, 256) tensor, img_rgb_fullres is (H, W, 3) numpy [0, 1]
+
+        # Linearize the 256x256 input via invCRF
+        input_256 = cv2.resize(img_rgb_fullres, (256, 256), interpolation=cv2.INTER_AREA)
+        input_256_t = torch.from_numpy(input_256).permute(2, 0, 1).to(hdr_256.device)
+        input_linear_256 = operator.invCRF(input_256_t.unsqueeze(0))[0]
+
+        # Compute per-channel gain map at 256x256
+        eps = 1e-6
+        gain_256 = hdr_256 / (input_linear_256 + eps)
+        gain_256 = gain_256.clamp(0.0, 100.0)  # cap extreme gains
+
+        # Convert gain map to numpy for upscaling
+        gain_np = gain_256.cpu().numpy().transpose(1, 2, 0)  # (256, 256, 3)
+
+        # Upscale gain map to original resolution
+        # Use bilateral filter to preserve edges, then resize
+        gain_smooth = cv2.bilateralFilter(gain_np.astype(np.float32), d=9, sigmaColor=0.5, sigmaSpace=5)
+        gain_fullres = cv2.resize(gain_smooth, (orig_w, orig_h), interpolation=cv2.INTER_CUBIC)
+
+        # Linearize full-res input
+        input_linear_full = input_256_t  # we need to linearize the full-res, not the 256 version
+        input_full_t = torch.from_numpy(img_rgb_fullres).permute(2, 0, 1).to(hdr_256.device)
+        input_linear_full = operator.invCRF(input_full_t.unsqueeze(0))[0]
+        input_linear_full_np = input_linear_full.cpu().numpy().transpose(1, 2, 0)
+
+        # Apply gain map to full-res linearized input
+        hdr_fullres = input_linear_full_np * gain_fullres
+        hdr_fullres = np.maximum(hdr_fullres, 0.0).astype(np.float32)
+
+        return hdr_fullres
 
     def _sample_loop(
         self, sampler, model, ref_img, measurement_cond_fn,
