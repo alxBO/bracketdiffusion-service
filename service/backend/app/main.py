@@ -94,7 +94,10 @@ async def lifespan(app: FastAPI):
     )
     cleanup_thread.start()
 
-    logger.info("Pipeline loaded. Service ready.")
+    if app.state.pipeline:
+        logger.info("Pipeline loaded. Service ready.")
+    else:
+        logger.warning("Service started WITHOUT pipeline (load failed). Inference unavailable.")
     yield
 
     # Shutdown

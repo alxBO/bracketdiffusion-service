@@ -17,10 +17,17 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Optional[Callable[[str, float, str], None]]
 
 # Add vendor BracketDiffusion to path
-VENDOR_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'vendor', 'BracketDiffusion', 'unconditional')
-)
-MODEL_DIR = os.environ.get("BRACKET_MODEL_DIR", os.path.join(VENDOR_DIR, "models"))
+# Derive from BRACKET_MODEL_DIR if set (points to .../unconditional/models),
+# otherwise compute relative to this file.
+_env_model_dir = os.environ.get("BRACKET_MODEL_DIR")
+if _env_model_dir:
+    VENDOR_DIR = os.path.normpath(os.path.join(_env_model_dir, ".."))
+    MODEL_DIR = _env_model_dir
+else:
+    VENDOR_DIR = os.path.normpath(
+        os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', '..', '..', 'vendor', 'BracketDiffusion', 'unconditional')
+    )
+    MODEL_DIR = os.path.join(VENDOR_DIR, "models")
 
 
 def _get_device():
@@ -64,6 +71,7 @@ def _load_vendor_modules():
     _patch_cuda_calls()
 
     if VENDOR_DIR not in sys.path:
+        logger.info("Adding vendor dir to sys.path: %s", VENDOR_DIR)
         sys.path.insert(0, VENDOR_DIR)
 
     from guided_diffusion.unet import create_model
