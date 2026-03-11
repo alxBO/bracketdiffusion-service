@@ -70,9 +70,20 @@ def _load_vendor_modules():
     _install_stub_modules()
     _patch_cuda_calls()
 
+    # Force our vendor dir at the front of sys.path
     if VENDOR_DIR not in sys.path:
         logger.info("Adding vendor dir to sys.path: %s", VENDOR_DIR)
+    # Always ensure it's first (ahead of any site-packages with same name)
+    if sys.path[0] != VENDOR_DIR:
+        while VENDOR_DIR in sys.path:
+            sys.path.remove(VENDOR_DIR)
         sys.path.insert(0, VENDOR_DIR)
+
+    # Evict any pre-existing guided_diffusion from sys.modules
+    # (e.g. from a pip-installed package) so our vendor version is used
+    for key in list(sys.modules.keys()):
+        if key == "guided_diffusion" or key.startswith("guided_diffusion."):
+            del sys.modules[key]
 
     from guided_diffusion.unet import create_model
     from guided_diffusion.gaussian_diffusion import create_sampler
