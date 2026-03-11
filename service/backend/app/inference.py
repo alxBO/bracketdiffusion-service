@@ -79,16 +79,32 @@ def _load_vendor_modules():
             sys.path.remove(VENDOR_DIR)
         sys.path.insert(0, VENDOR_DIR)
 
+    # Debug: verify the vendor directory contents
+    gd_path = os.path.join(VENDOR_DIR, "guided_diffusion")
+    logger.info("VENDOR_DIR exists: %s, guided_diffusion exists: %s",
+                os.path.isdir(VENDOR_DIR), os.path.isdir(gd_path))
+    if os.path.isdir(VENDOR_DIR):
+        logger.info("VENDOR_DIR contents: %s", os.listdir(VENDOR_DIR))
+    if os.path.isdir(gd_path):
+        logger.info("guided_diffusion contents: %s", os.listdir(gd_path))
+    logger.info("sys.path[0:3]: %s", sys.path[:3])
+
     # Evict any pre-existing guided_diffusion from sys.modules
     # (e.g. from a pip-installed package) so our vendor version is used
     for key in list(sys.modules.keys()):
         if key == "guided_diffusion" or key.startswith("guided_diffusion."):
             del sys.modules[key]
 
-    from guided_diffusion.unet import create_model
-    from guided_diffusion.gaussian_diffusion import create_sampler
-    from guided_diffusion.measurements import get_operator, get_noise
-    from guided_diffusion.condition_methods import get_conditioning_method
+    import importlib
+    try:
+        from guided_diffusion.unet import create_model
+        from guided_diffusion.gaussian_diffusion import create_sampler
+        from guided_diffusion.measurements import get_operator, get_noise
+        from guided_diffusion.condition_methods import get_conditioning_method
+    except ModuleNotFoundError:
+        import traceback
+        logger.error("Import failed. Full traceback:\n%s", traceback.format_exc())
+        raise
 
     return create_model, create_sampler, get_operator, get_noise, get_conditioning_method
 
