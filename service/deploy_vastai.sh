@@ -29,9 +29,23 @@ echo "=== BracketDiffusion Vast.ai Deployment ==="
 echo ""
 
 # 0. Ensure submodule is checked out
-if [ ! -d "$REPO_DIR/vendor/BracketDiffusion/unconditional/guided_diffusion" ]; then
+SUBMOD_DIR="$REPO_DIR/vendor/BracketDiffusion"
+if [ ! -d "$SUBMOD_DIR/unconditional/guided_diffusion" ]; then
     echo "[0/3] Initializing git submodule..."
+    # Save model weights if they were downloaded before submodule init
+    SAVED_WEIGHTS=""
+    if [ -f "$SUBMOD_DIR/unconditional/models/imagenet256.pt" ]; then
+        SAVED_WEIGHTS="$(mktemp -d)/imagenet256.pt"
+        mv "$SUBMOD_DIR/unconditional/models/imagenet256.pt" "$SAVED_WEIGHTS"
+    fi
+    # Clear partial submodule dir so git can clone fresh
+    rm -rf "$SUBMOD_DIR"
     cd "$REPO_DIR" && git submodule update --init
+    # Restore weights
+    if [ -n "$SAVED_WEIGHTS" ]; then
+        mkdir -p "$SUBMOD_DIR/unconditional/models"
+        mv "$SAVED_WEIGHTS" "$SUBMOD_DIR/unconditional/models/imagenet256.pt"
+    fi
 fi
 
 # 1. Install Python dependencies
