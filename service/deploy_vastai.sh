@@ -28,6 +28,12 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 echo "=== BracketDiffusion Vast.ai Deployment ==="
 echo ""
 
+# 0. Ensure submodule is checked out
+if [ ! -d "$REPO_DIR/vendor/BracketDiffusion/unconditional/guided_diffusion" ]; then
+    echo "[0/3] Initializing git submodule..."
+    cd "$REPO_DIR" && git submodule update --init
+fi
+
 # 1. Install Python dependencies
 echo "[1/3] Installing dependencies..."
 pip install -q -r "$SCRIPT_DIR/backend/requirements.txt"
