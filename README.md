@@ -24,7 +24,7 @@ cd ..
 ./run_mac.sh
 ```
 
-Open `http://localhost:8002`.
+Open `http://localhost:8003`.
 
 ## Quick Start (Vast.ai GPU)
 

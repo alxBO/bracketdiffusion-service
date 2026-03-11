@@ -17,7 +17,7 @@
 
 ```
 ┌─────────────────────────────┐
-│  FastAPI (port 8002)        │
+│  FastAPI (port 8003)        │
 │  - Static files (HTML/JS)   │
 │  - REST API                 │
 │  - SSE (progress)           │
@@ -94,7 +94,7 @@ cd service
 ./run_mac.sh
 ```
 
-The web UI is available at `http://localhost:8002`.
+The web UI is available at `http://localhost:8003`.
 
 ### Device selection
 
@@ -109,7 +109,7 @@ The web UI is available at `http://localhost:8002`.
 
 - Pick a GPU with **>= 24 GB VRAM** (RTX 3090, RTX 4090, A100 recommended)
 - Use a **PyTorch** template image (e.g. `pytorch/pytorch:2.x-cuda12.x-runtime`)
-- In **Docker options**, add: `-p 8002:8002`
+- In **Docker options**, add: `-p 8003:8003`
 - Disk space: **10 GB minimum**
 
 > **Important**: 5 brackets at 256x256 require ~23 GB VRAM. Use 3 brackets to reduce to ~14 GB.
@@ -127,7 +127,7 @@ cd bracketdiffusion-service/service
 The script will:
 1. Install Python dependencies
 2. Download the model checkpoint (~1.5 GB)
-3. Start uvicorn on port 8002
+3. Start uvicorn on port 8003
 
 ### 3. Access
 
@@ -215,18 +215,18 @@ The middle bracket (EV+0) is the input image. The model generates the other brac
 
 ```bash
 # Upload
-curl -s -F "file=@photo.jpg" http://localhost:8002/api/upload
+curl -s -F "file=@photo.jpg" http://localhost:8003/api/upload
 
 # Generate (5 brackets, 250 steps for faster inference)
-curl -s -X POST http://localhost:8002/api/generate/<job_id> \
+curl -s -X POST http://localhost:8003/api/generate/<job_id> \
   -H "Content-Type: application/json" \
   -d '{"num_brackets": 5, "ev_steps": 4, "diffusion_steps": 250}'
 
 # Progress (SSE)
-curl -N http://localhost:8002/api/status/<job_id>
+curl -N http://localhost:8003/api/status/<job_id>
 
 # Download result
-curl -o photo_hdr.exr http://localhost:8002/api/download/<job_id>
+curl -o photo_hdr.exr http://localhost:8003/api/download/<job_id>
 ```
 
 ### Request body for `/api/generate`

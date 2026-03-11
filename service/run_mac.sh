@@ -23,10 +23,10 @@ export BRACKET_MODEL_DIR="$REPO_DIR/vendor/BracketDiffusion/unconditional/models
 export MAX_MEGAPIXELS=50
 export JOB_TTL_HOURS=24
 
-echo "Starting BracketDiffusion on http://localhost:8002"
+echo "Starting BracketDiffusion on http://localhost:8003"
 echo "Backend: PyTorch (CPU — MPS not supported by this diffusion model)"
 echo "Model: $MODEL_FILE"
 echo ""
 
 cd "$SCRIPT_DIR/backend"
-exec uvicorn app.main:app --host 0.0.0.0 --port 8002 --workers 1
+exec uvicorn app.main:app --host 0.0.0.0 --port 8003 --workers 1

@@ -5,7 +5,7 @@
 #
 # 1. Choose a GPU instance (RTX 3090+ with >= 24 GB VRAM recommended)
 # 2. Use a PyTorch template image (e.g. pytorch/pytorch:2.x-cuda12.x-runtime)
-# 3. In "Docker options", add:  -p 8002:8002
+# 3. In "Docker options", add:  -p 8003:8003
 # 4. Set disk space to at least 10 GB
 #
 # === On the instance ===
@@ -42,13 +42,13 @@ else
 fi
 
 # 3. Start the service
-echo "[3/3] Starting service on port 8002..."
+echo "[3/3] Starting service on port 8003..."
 echo ""
 
-if [ -n "$VAST_TCP_PORT_8002" ]; then
-    echo "Direct access: http://$(hostname -I | awk '{print $1}'):$VAST_TCP_PORT_8002"
+if [ -n "$VAST_TCP_PORT_8003" ]; then
+    echo "Direct access: http://$(hostname -I | awk '{print $1}'):$VAST_TCP_PORT_8003"
 fi
-echo "Local: http://0.0.0.0:8002"
+echo "Local: http://0.0.0.0:8003"
 echo ""
 
 cd "$SCRIPT_DIR/backend"
@@ -56,4 +56,4 @@ export BRACKET_MODEL_DIR="$REPO_DIR/vendor/BracketDiffusion/unconditional/models
 export MAX_MEGAPIXELS=50
 export JOB_TTL_HOURS=24
 
-exec uvicorn app.main:app --host 0.0.0.0 --port 8002 --workers 1
+exec uvicorn app.main:app --host 0.0.0.0 --port 8003 --workers 1
